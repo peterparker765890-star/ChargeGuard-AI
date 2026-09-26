@@ -1,33 +1,41 @@
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+<?xml version="1.0" encoding="utf-8"?>
 
-<application
-    android:allowBackup="true"
-    android:icon="@drawable/ic_chargeguard"
-    android:roundIcon="@drawable/ic_chargeguard"
-    android:label="ChargeGuard AI"
-    android:theme="@style/AppTheme">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <activity
-        android:name=".MainActivity"
-        android:exported="true">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    </activity>
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_chargeguard"
+        android:roundIcon="@drawable/ic_chargeguard"
+        android:label="ChargeGuard AI"
+        android:theme="@style/AppTheme">
 
-    <service
-        android:name=".ChargeAlertService"
-        android:exported="false"
-        android:foregroundServiceType="specialUse">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
 
-        <property
-            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-            android:value="battery charging monitoring and user-requested charging alerts" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
-    </service>
+        </activity>
 
-</application>
+        <service
+            android:name=".ChargeAlertService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="battery charging monitoring and user-requested charging alerts" />
+
+        </service>
+
+    </application>
+
+</manifest>
