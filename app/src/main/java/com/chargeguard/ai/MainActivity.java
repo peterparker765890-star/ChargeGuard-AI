@@ -3,12 +3,15 @@ package com.chargeguard.ai;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -20,14 +23,28 @@ public class MainActivity extends Activity {
 
     private TextView batteryText;
     private TextView chargingText;
-    private TextView batteryInfoText;
     private TextView insightText;
+    private TextView alertStatusText;
 
     private boolean alertsEnabled = true;
+
+    private SharedPreferences preferences;
+
+    private static final int SOUND_PICKER_REQUEST = 500;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        preferences = getSharedPreferences(
+                "ChargeGuardPrefs",
+                MODE_PRIVATE
+        );
+
+        alertsEnabled = preferences.getBoolean(
+                "alerts_enabled",
+                true
+        );
 
         requestNotificationPermission();
 
@@ -59,11 +76,17 @@ public class MainActivity extends Activity {
     private void startChargeGuardService() {
 
         Intent serviceIntent =
-                new Intent(this, ChargeAlertService.class);
+                new Intent(
+                        this,
+                        ChargeAlertService.class
+                );
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
             startForegroundService(serviceIntent);
+
         } else {
+
             startService(serviceIntent);
         }
     }
@@ -74,7 +97,9 @@ public class MainActivity extends Activity {
                 registerReceiver(
                         null,
                         new android.content.IntentFilter(
-                                Intent.ACTION_BATTERY_CHANGED));
+                                Intent.ACTION_BATTERY_CHANGED
+                        )
+                );
 
         if (batteryIntent == null) {
             return;
@@ -82,85 +107,60 @@ public class MainActivity extends Activity {
 
         int level =
                 batteryIntent.getIntExtra(
-                        BatteryManager.EXTRA_LEVEL, -1);
+                        BatteryManager.EXTRA_LEVEL,
+                        -1
+                );
 
         int status =
                 batteryIntent.getIntExtra(
-                        BatteryManager.EXTRA_STATUS, -1);
-
-        int temperature =
-                batteryIntent.getIntExtra(
-                        BatteryManager.EXTRA_TEMPERATURE, -1);
-
-        int voltage =
-                batteryIntent.getIntExtra(
-                        BatteryManager.EXTRA_VOLTAGE, -1);
-
-        int plugged =
-                batteryIntent.getIntExtra(
-                        BatteryManager.EXTRA_PLUGGED, -1);
+                        BatteryManager.EXTRA_STATUS,
+                        -1
+                );
 
         boolean charging =
-                status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL;
+                status == BatteryManager.BATTERY_STATUS_CHARGING
+                        || status == BatteryManager.BATTERY_STATUS_FULL;
 
         batteryText.setText(level + "%");
-
-        String chargingMethod = "Not connected";
-
-        if (plugged == BatteryManager.BATTERY_PLUGGED_USB) {
-            chargingMethod = "USB";
-        } else if (plugged == BatteryManager.BATTERY_PLUGGED_AC) {
-            chargingMethod = "AC Charger";
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
-                && plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS) {
-            chargingMethod = "Wireless";
-        }
-
-        float tempCelsius = temperature / 10.0f;
-
-        float voltageValue = voltage / 1000.0f;
-
-        batteryInfoText.setText(
-                "🌡 Temperature: " + tempCelsius + " °C\n" +
-                "⚡ Voltage: " + voltageValue + " V\n" +
-                "🔌 Method: " + chargingMethod
-        );
 
         if (charging) {
 
             chargingText.setText("⚡ CHARGING");
-
             chargingText.setTextColor(
-                    Color.rgb(34, 197, 94));
+                    Color.rgb(34, 197, 94)
+            );
 
             if (level >= 100) {
 
                 insightText.setText(
-                        "💯 FULL POWER\n\n" +
-                        "Battery is completely charged.\n" +
-                        "Consider unplugging your charger.");
+                        "🔥 FULL POWER\n\n" +
+                        "Battery reached 100%.\n" +
+                        "ChargeGuard recommends unplugging now."
+                );
 
             } else if (level >= 90) {
 
                 insightText.setText(
-                        "👀 90% ZONE\n\n" +
-                        "Your battery is almost full.\n" +
-                        "ChargeGuard recommends checking your charger.");
+                        "🚨 FINAL CHARGE ZONE\n\n" +
+                        "You're above 90%.\n" +
+                        "ChargeGuard is watching the battery."
+                );
 
-            } else if (tempCelsius >= 45) {
+            } else if (level <= 20) {
 
                 insightText.setText(
-                        "🌡️ HIGH TEMPERATURE\n\n" +
-                        "Your battery temperature is high.\n" +
-                        "Consider stopping charging and letting the phone cool.");
+                        "🆘 LOW BATTERY\n\n" +
+                        "Battery is getting low.\n" +
+                        "Consider charging soon."
+                );
 
             } else {
 
                 insightText.setText(
-                        "🧠 AI STATUS\n\n" +
+                        "🧠 AI BATTERY WATCH\n\n" +
                         "Charging normally.\n" +
-                        "Temperature and voltage are being monitored.");
+                        "ChargeGuard is monitoring your battery."
+                );
             }
 
         } else {
@@ -168,223 +168,496 @@ public class MainActivity extends Activity {
             chargingText.setText("● NOT CHARGING");
 
             chargingText.setTextColor(
-                    Color.LTGRAY);
+                    Color.LTGRAY
+            );
 
-            insightText.setText(
-                    "🧠 AI STATUS\n\n" +
-                    "Battery monitoring is active.\n" +
-                    "Connect your charger to start monitoring.");
+            if (level <= 15) {
+
+                insightText.setText(
+                        "🆘 CRITICAL BATTERY\n\n" +
+                        "Battery is very low.\n" +
+                        "Plug in your charger."
+                );
+
+            } else if (level <= 30) {
+
+                insightText.setText(
+                        "⚠️ BATTERY LOW\n\n" +
+                        "You may want to charge soon."
+                );
+
+            } else {
+
+                insightText.setText(
+                        "🧠 AI STATUS\n\n" +
+                        "Battery monitoring is active."
+                );
+            }
         }
     }
 
     private void buildInterface() {
 
-        LinearLayout root = new LinearLayout(this);
+        LinearLayout root =
+                new LinearLayout(this);
 
         root.setOrientation(
-                LinearLayout.VERTICAL);
+                LinearLayout.VERTICAL
+        );
 
         root.setPadding(
-                28, 45, 28, 30);
+                28,
+                45,
+                28,
+                30
+        );
 
         root.setBackgroundColor(
-                Color.rgb(9, 9, 11));
+                Color.rgb(7, 7, 10)
+        );
 
-        TextView logo = new TextView(this);
+        TextView logo =
+                new TextView(this);
 
-        logo.setText("⚡ CHARGEGUARD AI");
+        logo.setText(
+                "⚡ CHARGEGUARD"
+        );
 
-        logo.setTextColor(Color.WHITE);
+        logo.setTextColor(
+                Color.WHITE
+        );
 
-        logo.setTextSize(26);
+        logo.setTextSize(30);
 
         logo.setTypeface(
                 Typeface.DEFAULT,
-                Typeface.BOLD);
+                Typeface.BOLD
+        );
 
-        logo.setGravity(Gravity.CENTER);
+        logo.setGravity(
+                Gravity.CENTER
+        );
 
-        TextView tagline = new TextView(this);
+        TextView aiLabel =
+                new TextView(this);
 
-        tagline.setText(
-                "Power Up. Stay Smart.");
+        aiLabel.setText(
+                "AI BATTERY DEFENSE SYSTEM"
+        );
 
-        tagline.setTextColor(
-                Color.rgb(168, 85, 247));
+        aiLabel.setTextColor(
+                Color.rgb(168, 85, 247)
+        );
 
-        tagline.setTextSize(15);
+        aiLabel.setTextSize(13);
 
-        tagline.setGravity(Gravity.CENTER);
+        aiLabel.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
 
-        tagline.setPadding(
-                0, 8, 0, 25);
+        aiLabel.setGravity(
+                Gravity.CENTER
+        );
 
-        batteryText = new TextView(this);
+        aiLabel.setPadding(
+                0,
+                8,
+                0,
+                30
+        );
+
+        batteryText =
+                new TextView(this);
 
         batteryText.setText("--%");
 
-        batteryText.setTextColor(Color.WHITE);
+        batteryText.setTextColor(
+                Color.WHITE
+        );
 
-        batteryText.setTextSize(62);
+        batteryText.setTextSize(64);
 
         batteryText.setTypeface(
                 Typeface.DEFAULT,
-                Typeface.BOLD);
+                Typeface.BOLD
+        );
 
-        batteryText.setGravity(Gravity.CENTER);
+        batteryText.setGravity(
+                Gravity.CENTER
+        );
 
-        chargingText = new TextView(this);
+        chargingText =
+                new TextView(this);
 
         chargingText.setText(
-                "Checking...");
+                "Checking..."
+        );
 
         chargingText.setTextColor(
-                Color.LTGRAY);
+                Color.LTGRAY
+        );
 
         chargingText.setTextSize(17);
 
+        chargingText.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
         chargingText.setGravity(
-                Gravity.CENTER);
+                Gravity.CENTER
+        );
 
         chargingText.setPadding(
-                0, 5, 0, 18);
+                0,
+                5,
+                0,
+                25
+        );
 
-        batteryInfoText = new TextView(this);
-
-        batteryInfoText.setText(
-                "🌡 Temperature: -- °C\n" +
-                "⚡ Voltage: -- V\n" +
-                "🔌 Method: --");
-
-        batteryInfoText.setTextColor(
-                Color.LTGRAY);
-
-        batteryInfoText.setTextSize(15);
-
-        batteryInfoText.setGravity(
-                Gravity.CENTER);
-
-        batteryInfoText.setPadding(
-                15, 15, 15, 15);
-
-        batteryInfoText.setBackgroundColor(
-                Color.rgb(24, 24, 27));
-
-        insightText = new TextView(this);
+        insightText =
+                new TextView(this);
 
         insightText.setText(
-                "🧠 AI STATUS");
+                "🧠 AI BATTERY WATCH"
+        );
 
-        insightText.setTextColor(Color.WHITE);
+        insightText.setTextColor(
+                Color.WHITE
+        );
 
         insightText.setTextSize(16);
 
         insightText.setGravity(
-                Gravity.CENTER);
+                Gravity.CENTER
+        );
 
         insightText.setPadding(
-                20, 20, 20, 20);
+                25,
+                25,
+                25,
+                25
+        );
 
         insightText.setBackgroundColor(
-                Color.rgb(24, 24, 27));
+                Color.rgb(24, 24, 28)
+        );
 
         Button alertsButton =
                 new Button(this);
 
-        alertsButton.setText(
-                "🔔  ALERTS: ON");
+        if (alertsEnabled) {
+
+            alertsButton.setText(
+                    "🔔  ALERTS: ON"
+            );
+
+        } else {
+
+            alertsButton.setText(
+                    "🔕  ALERTS: OFF"
+            );
+        }
 
         alertsButton.setTextColor(
-                Color.WHITE);
+                Color.WHITE
+        );
 
         alertsButton.setOnClickListener(v -> {
 
-            alertsEnabled =
-                    !alertsEnabled;
+            alertsEnabled = !alertsEnabled;
+
+            preferences.edit()
+                    .putBoolean(
+                            "alerts_enabled",
+                            alertsEnabled
+                    )
+                    .apply();
+
+            Intent serviceIntent =
+                    new Intent(
+                            this,
+                            ChargeAlertService.class
+                    );
+
+            serviceIntent.setAction(
+                    ChargeAlertService.ACTION_UPDATE_SETTINGS
+            );
+
+            startService(serviceIntent);
 
             if (alertsEnabled) {
 
                 alertsButton.setText(
-                        "🔔  ALERTS: ON");
+                        "🔔  ALERTS: ON"
+                );
 
                 Toast.makeText(
                         this,
                         "Charge alerts enabled ⚡",
-                        Toast.LENGTH_SHORT).show();
+                        Toast.LENGTH_SHORT
+                ).show();
 
             } else {
 
                 alertsButton.setText(
-                        "🔕  ALERTS: OFF");
+                        "🔕  ALERTS: OFF"
+                );
 
                 Toast.makeText(
                         this,
                         "Charge alerts disabled",
-                        Toast.LENGTH_SHORT).show();
+                        Toast.LENGTH_SHORT
+                ).show();
             }
         });
+
+        Button soundButton =
+                new Button(this);
+
+        soundButton.setText(
+                "🎵  CHOOSE ALERT SOUND"
+        );
+
+        soundButton.setTextColor(
+                Color.WHITE
+        );
+
+        soundButton.setOnClickListener(
+                v -> chooseAlertSound()
+        );
 
         Button historyButton =
                 new Button(this);
 
         historyButton.setText(
-                "📊  CHARGING HISTORY");
+                "📊  CHARGING HISTORY"
+        );
 
         historyButton.setTextColor(
-                Color.WHITE);
+                Color.WHITE
+        );
 
         historyButton.setOnClickListener(v ->
                 Toast.makeText(
                         this,
-                        "Charging history is coming next 📊",
-                        Toast.LENGTH_SHORT).show()
+                        "Charging history module is next 📊",
+                        Toast.LENGTH_SHORT
+                ).show()
         );
 
         Button aiButton =
                 new Button(this);
 
         aiButton.setText(
-                "🧠  AI INSIGHTS");
+                "🧠  AI INSIGHTS"
+        );
 
         aiButton.setTextColor(
-                Color.WHITE);
+                Color.WHITE
+        );
 
         aiButton.setOnClickListener(v ->
-                Toast.makeText(
-                        this,
-                        "AI charging analysis is coming next 🤖",
-                        Toast.LENGTH_SHORT).show()
+                showSmartInsight()
+        );
+
+        alertStatusText =
+                new TextView(this);
+
+        alertStatusText.setText(
+                "🛡 ChargeGuard is protecting your battery"
+        );
+
+        alertStatusText.setTextColor(
+                Color.GRAY
+        );
+
+        alertStatusText.setTextSize(12);
+
+        alertStatusText.setGravity(
+                Gravity.CENTER
         );
 
         root.addView(logo);
-        root.addView(tagline);
+        root.addView(aiLabel);
         root.addView(batteryText);
         root.addView(chargingText);
-        root.addView(batteryInfoText);
-
-        addSpace(root, 12);
-
         root.addView(insightText);
 
-        addSpace(root, 12);
+        addSpace(root, 18);
 
         root.addView(alertsButton);
+        root.addView(soundButton);
         root.addView(historyButton);
         root.addView(aiButton);
 
+        addSpace(root, 12);
+
+        root.addView(alertStatusText);
+
         setContentView(root);
+    }
+
+    private void chooseAlertSound() {
+
+        Intent intent =
+                new Intent(
+                        android.media.RingtoneManager
+                                .ACTION_RINGTONE_PICKER
+                );
+
+        intent.putExtra(
+                android.media.RingtoneManager
+                        .EXTRA_RINGTONE_TYPE,
+                android.media.RingtoneManager
+                        .TYPE_NOTIFICATION
+                        | android.media.RingtoneManager
+                        .TYPE_ALARM
+        );
+
+        intent.putExtra(
+                android.media.RingtoneManager
+                        .EXTRA_RINGTONE_TITLE,
+                "Choose ChargeGuard Alert Sound"
+        );
+
+        String saved =
+                preferences.getString(
+                        "alert_sound",
+                        null
+                );
+
+        if (saved != null) {
+
+            intent.putExtra(
+                    android.media.RingtoneManager
+                            .EXTRA_RINGTONE_EXISTING_URI,
+                    Uri.parse(saved)
+            );
+        }
+
+        startActivityForResult(
+                intent,
+                SOUND_PICKER_REQUEST
+        );
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data) {
+
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
+
+        if (requestCode ==
+                SOUND_PICKER_REQUEST
+                && resultCode == RESULT_OK
+                && data != null) {
+
+            Uri soundUri =
+                    data.getParcelableExtra(
+                            android.media.RingtoneManager
+                                    .EXTRA_RINGTONE_PICKED_URI
+                    );
+
+            if (soundUri != null) {
+
+                preferences.edit()
+                        .putString(
+                                "alert_sound",
+                                soundUri.toString()
+                        )
+                        .apply();
+
+                Toast.makeText(
+                        this,
+                        "🔥 Your alert sound is saved!",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+        }
+    }
+
+    private void showSmartInsight() {
+
+        Intent batteryIntent =
+                registerReceiver(
+                        null,
+                        new android.content.IntentFilter(
+                                Intent.ACTION_BATTERY_CHANGED
+                        )
+                );
+
+        if (batteryIntent == null) {
+            return;
+        }
+
+        int level =
+                batteryIntent.getIntExtra(
+                        BatteryManager.EXTRA_LEVEL,
+                        -1
+                );
+
+        String message;
+
+        if (level >= 95) {
+
+            message =
+                    "🔥 Almost full.\n\n" +
+                    "ChargeGuard recommends unplugging soon.";
+
+        } else if (level >= 80) {
+
+            message =
+                    "🧠 Smart Tip\n\n" +
+                    "You're in the high-charge zone.\n" +
+                    "Avoid unnecessary charging for long periods.";
+
+        } else if (level <= 20) {
+
+            message =
+                    "🆘 Smart Warning\n\n" +
+                    "Battery is critically low.\n" +
+                    "Connect your charger soon.";
+
+        } else {
+
+            message =
+                    "🧠 Battery Health Tip\n\n" +
+                    "Keep your phone away from excessive heat " +
+                    "while charging.\n\n" +
+                    "ChargeGuard is watching ⚡";
+        }
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("🧠 ChargeGuard AI")
+                .setMessage(message)
+                .setPositiveButton(
+                        "OK",
+                        null
+                )
+                .show();
     }
 
     private void addSpace(
             LinearLayout layout,
             int height) {
 
-        View space = new View(this);
+        View space =
+                new View(this);
 
         layout.addView(
                 space,
                 new LinearLayout.LayoutParams(
                         1,
-                        height));
+                        height
+                )
+        );
     }
 }
