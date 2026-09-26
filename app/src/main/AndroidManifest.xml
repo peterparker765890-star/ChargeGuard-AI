@@ -3,14 +3,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_chargeguard"
-        android:roundIcon="@drawable/ic_chargeguard"
+        android:icon="@android:drawable/ic_lock_idle_charging"
+        android:roundIcon="@android:drawable/ic_lock_idle_charging"
         android:label="ChargeGuard AI"
         android:theme="@style/AppTheme">
 
