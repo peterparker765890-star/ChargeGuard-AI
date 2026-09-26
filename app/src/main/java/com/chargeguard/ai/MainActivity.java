@@ -307,3 +307,4 @@ private void addSpace(
                     1,
                     height));
 }
+}
