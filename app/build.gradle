@@ -14,7 +14,7 @@ defaultConfig {
 
 dependencies {implementation 'androidx.core:core:1.17.0'}
 
-writing{variant="standard" title="ChargeGuard AI app/build.gradle" id="41827"}
+writing{variant="standard" title="Correct app/build.gradle" id="62417"}
 plugins {
     id 'com.android.application'
 }
