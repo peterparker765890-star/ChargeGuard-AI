@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
@@ -19,11 +20,7 @@ import androidx.core.app.NotificationCompat;
 
 public class ChargeAlertService extends Service {
 
-    public static final String ACTION_UPDATE_SETTINGS =
-            "com.chargeguard.ai.UPDATE_SETTINGS";
-
-    private static final String CHANNEL_ID =
-            "chargeguard_monitor";
+    private static final String CHANNEL_ID = "chargeguard_monitor";
 
     private boolean alerted90 = false;
     private boolean alerted100 = false;
@@ -34,36 +31,21 @@ public class ChargeAlertService extends Service {
             new BroadcastReceiver() {
 
                 @Override
-                public void onReceive(
-                        Context context,
-                        Intent intent) {
+                public void onReceive(Context context, Intent intent) {
 
-                    int level =
-                            intent.getIntExtra(
-                                    BatteryManager.EXTRA_LEVEL,
-                                    -1
-                            );
+                    int level = intent.getIntExtra(
+                            BatteryManager.EXTRA_LEVEL, -1);
 
-                    int status =
-                            intent.getIntExtra(
-                                    BatteryManager.EXTRA_STATUS,
-                                    -1
-                            );
+                    int status = intent.getIntExtra(
+                            BatteryManager.EXTRA_STATUS, -1);
 
                     boolean charging =
-                            status ==
-                                    BatteryManager
-                                            .BATTERY_STATUS_CHARGING
-                            ||
-                            status ==
-                                    BatteryManager
-                                            .BATTERY_STATUS_FULL;
+                            status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                            status == BatteryManager.BATTERY_STATUS_FULL;
 
                     if (!charging) {
-
                         alerted90 = false;
                         alerted100 = false;
-
                         return;
                     }
 
@@ -80,31 +62,30 @@ public class ChargeAlertService extends Service {
                         return;
                     }
 
-                    if (level >= 90
-                            && level < 100
-                            && !alerted90) {
+                    // 90% warning
+                    if (level >= 90 && level < 100 && !alerted90) {
 
                         alerted90 = true;
 
                         sendAlert(
-                                "⚡ 90% ALERT",
-                                "You're at 90%. ChargeGuard is watching."
+                                "⚡ CHARGEGUARD — 90%",
+                                "You're almost full. Keep an eye on your battery."
                         );
 
-                        playAlertSound();
+                        playAlertSound(false);
                     }
 
-                    if (level >= 100
-                            && !alerted100) {
+                    // 100% warning
+                    if (level >= 100 && !alerted100) {
 
                         alerted100 = true;
 
                         sendAlert(
-                                "🔥 100% FULL POWER",
-                                "Battery is full! Unplug your charger."
+                                "🚨 CHARGEGUARD — 100% FULL",
+                                "Battery is completely charged. Unplug your charger."
                         );
 
-                        playAlertSound();
+                        playAlertSound(true);
                     }
                 }
             };
@@ -121,103 +102,79 @@ public class ChargeAlertService extends Service {
                         this,
                         CHANNEL_ID
                 )
-                        .setContentTitle(
-                                "⚡ ChargeGuard AI"
-                        )
+                        .setContentTitle("⚡ ChargeGuard AI")
                         .setContentText(
-                                "🛡 Battery protection active"
-                        )
+                                "🛡 Battery protection is active")
                         .setSmallIcon(
-                                R.drawable.ic_chargeguard
-                        )
+                                android.R.drawable.ic_lock_idle_charging)
                         .setOngoing(true)
                         .setPriority(
-                                NotificationCompat.PRIORITY_LOW
-                        )
+                                NotificationCompat.PRIORITY_LOW)
                         .build();
 
-        startForeground(
-                1001,
-                notification
-        );
+        startForeground(1001, notification);
 
         IntentFilter filter =
                 new IntentFilter(
-                        Intent.ACTION_BATTERY_CHANGED
-                );
+                        Intent.ACTION_BATTERY_CHANGED);
 
         registerReceiver(
                 batteryReceiver,
-                filter
-        );
+                filter);
     }
 
     private void sendAlert(
             String title,
             String message) {
 
-        android.content.SharedPreferences preferences =
-                getSharedPreferences(
-                        "ChargeGuardPrefs",
-                        MODE_PRIVATE
-                );
-
-        String savedSound =
-                preferences.getString(
-                        "alert_sound",
-                        null
-                );
-
-        Uri sound = null;
-
-        if (savedSound != null) {
-
-            sound = Uri.parse(savedSound);
-
-        } else {
-
-            sound =
-                    android.media.RingtoneManager
-                            .getDefaultUri(
-                                    android.media.RingtoneManager
-                                            .TYPE_NOTIFICATION
-                            );
-        }
+        Uri sound =
+                RingtoneManager.getDefaultUri(
+                        RingtoneManager.TYPE_NOTIFICATION);
 
         NotificationCompat.Builder builder =
                 new NotificationCompat.Builder(
                         this,
-                        CHANNEL_ID
-                )
+                        CHANNEL_ID)
+
                         .setSmallIcon(
-                                R.drawable.ic_chargeguard
-                        )
+                                android.R.drawable
+                                        .ic_lock_idle_charging)
+
                         .setContentTitle(title)
+
                         .setContentText(message)
+
                         .setPriority(
-                                NotificationCompat
-                                        .PRIORITY_MAX
-                        )
+                                NotificationCompat.PRIORITY_MAX)
+
                         .setCategory(
-                                NotificationCompat
-                                        .CATEGORY_ALARM
-                        )
+                                NotificationCompat.CATEGORY_ALARM)
+
                         .setAutoCancel(true)
+
+                        .setVibrate(
+                                new long[]{
+                                        0,
+                                        500,
+                                        300,
+                                        700,
+                                        300,
+                                        1000
+                                })
+
                         .setSound(sound);
 
         NotificationManager manager =
                 (NotificationManager)
                         getSystemService(
-                                Context.NOTIFICATION_SERVICE
-                        );
+                                Context.NOTIFICATION_SERVICE);
 
         manager.notify(
                 (int) System.currentTimeMillis(),
-                builder.build()
-        );
+                builder.build());
     }
 
-    private void playAlertSound() {
+    private void playAlertSound(boolean fullCharge) {
 
         try {
 
@@ -231,14 +188,12 @@ public class ChargeAlertService extends Service {
             android.content.SharedPreferences preferences =
                     getSharedPreferences(
                             "ChargeGuardPrefs",
-                            MODE_PRIVATE
-                    );
+                            MODE_PRIVATE);
 
             String savedSound =
                     preferences.getString(
                             "alert_sound",
-                            null
-                    );
+                            null);
 
             Uri sound;
 
@@ -246,26 +201,28 @@ public class ChargeAlertService extends Service {
 
                 sound = Uri.parse(savedSound);
 
+            } else if (fullCharge) {
+
+                // Stronger alarm sound for 100%
+                sound =
+                        RingtoneManager.getDefaultUri(
+                                RingtoneManager.TYPE_ALARM);
+
             } else {
 
                 sound =
-                        android.media.RingtoneManager
-                                .getDefaultUri(
-                                        android.media.RingtoneManager
-                                                .TYPE_ALARM
-                                );
+                        RingtoneManager.getDefaultUri(
+                                RingtoneManager.TYPE_NOTIFICATION);
             }
 
             mediaPlayer =
                     MediaPlayer.create(
                             this,
-                            sound
-                    );
+                            sound);
 
             if (mediaPlayer != null) {
 
                 mediaPlayer.setLooping(false);
-
                 mediaPlayer.start();
             }
 
@@ -278,42 +235,35 @@ public class ChargeAlertService extends Service {
         if (Build.VERSION.SDK_INT >=
                 Build.VERSION_CODES.O) {
 
+            NotificationManager manager =
+                    getSystemService(
+                            NotificationManager.class);
+
             NotificationChannel channel =
                     new NotificationChannel(
                             CHANNEL_ID,
                             "ChargeGuard Battery Alerts",
-                            NotificationManager
-                                    .IMPORTANCE_HIGH
-                    );
+                            NotificationManager.IMPORTANCE_HIGH);
 
             channel.setDescription(
-                    "Battery charging alerts"
-            );
+                    "90% and 100% battery alerts");
 
             channel.enableVibration(true);
 
-            channel.setSound(
-                    android.media.RingtoneManager
-                            .getDefaultUri(
-                                    android.media.RingtoneManager
-                                            .TYPE_NOTIFICATION
-                            ),
+            AudioAttributes attributes =
                     new AudioAttributes.Builder()
                             .setUsage(
                                     AudioAttributes
-                                            .USAGE_NOTIFICATION
-                            )
-                            .build()
-            );
+                                            .USAGE_ALARM)
+                            .build();
 
-            NotificationManager manager =
-                    getSystemService(
-                            NotificationManager.class
-                    );
+            channel.setSound(
+                    RingtoneManager.getDefaultUri(
+                            RingtoneManager.TYPE_ALARM),
+                    attributes);
 
             manager.createNotificationChannel(
-                    channel
-            );
+                    channel);
         }
     }
 
@@ -321,11 +271,8 @@ public class ChargeAlertService extends Service {
     public void onDestroy() {
 
         try {
-
             unregisterReceiver(
-                    batteryReceiver
-            );
-
+                    batteryReceiver);
         } catch (Exception ignored) {
         }
 
