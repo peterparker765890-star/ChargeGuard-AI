@@ -1,20 +1,3 @@
-plugins {id 'com.android.application'}
-
-android {namespace 'com.chargeguard.ai'compileSdk 35
-
-defaultConfig {
-    applicationId 'com.chargeguard.ai'
-    minSdk 23
-    targetSdk 35
-    versionCode 2
-    versionName "0.2"
-}
-
-}
-
-dependencies {implementation 'androidx.core:core:1.17.0'}
-
-writing{variant="standard" title="Correct app/build.gradle" id="62417"}
 plugins {
     id 'com.android.application'
 }
