@@ -2,7 +2,10 @@ package com.chargeguard.ai;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -32,6 +35,26 @@ public class MainActivity extends Activity {
 
     private static final int SOUND_PICKER_REQUEST = 500;
 
+    /*
+     * Continuously watches the phone battery.
+     * This fixes the old battery percentage staying on screen.
+     */
+    private final BroadcastReceiver batteryReceiver =
+            new BroadcastReceiver() {
+
+                @Override
+                public void onReceive(
+                        Context context,
+                        Intent intent) {
+
+                    if (Intent.ACTION_BATTERY_CHANGED.equals(
+                            intent.getAction())) {
+
+                        updateBatteryDisplay(intent);
+                    }
+                }
+            };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -55,9 +78,48 @@ public class MainActivity extends Activity {
         updateBatteryDisplay();
     }
 
-    private void requestNotificationPermission() {
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        IntentFilter filter =
+                new IntentFilter(
+                        Intent.ACTION_BATTERY_CHANGED
+                );
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+            registerReceiver(
+                    batteryReceiver,
+                    filter,
+                    Context.RECEIVER_NOT_EXPORTED
+            );
+
+        } else {
+
+            registerReceiver(
+                    batteryReceiver,
+                    filter
+            );
+        }
+
+        updateBatteryDisplay();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        try {
+            unregisterReceiver(batteryReceiver);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void requestNotificationPermission() {
+
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.TIRAMISU) {
 
             if (checkSelfPermission(
                     Manifest.permission.POST_NOTIFICATIONS)
@@ -81,29 +143,47 @@ public class MainActivity extends Activity {
                         ChargeAlertService.class
                 );
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O) {
 
-            startForegroundService(serviceIntent);
+            startForegroundService(
+                    serviceIntent
+            );
 
         } else {
 
-            startService(serviceIntent);
+            startService(
+                    serviceIntent
+            );
         }
     }
 
+    /*
+     * Gets the current battery information.
+     */
     private void updateBatteryDisplay() {
 
         Intent batteryIntent =
                 registerReceiver(
                         null,
-                        new android.content.IntentFilter(
+                        new IntentFilter(
                                 Intent.ACTION_BATTERY_CHANGED
                         )
                 );
 
-        if (batteryIntent == null) {
-            return;
+        if (batteryIntent != null) {
+
+            updateBatteryDisplay(
+                    batteryIntent
+            );
         }
+    }
+
+    /*
+     * Updates the UI from the current battery Intent.
+     */
+    private void updateBatteryDisplay(
+            Intent batteryIntent) {
 
         int level =
                 batteryIntent.getIntExtra(
@@ -117,20 +197,50 @@ public class MainActivity extends Activity {
                         -1
                 );
 
-        boolean charging =
-                status == BatteryManager.BATTERY_STATUS_CHARGING
-                        || status == BatteryManager.BATTERY_STATUS_FULL;
+        int plugged =
+                batteryIntent.getIntExtra(
+                        BatteryManager.EXTRA_PLUGGED,
+                        -1
+                );
 
-        batteryText.setText(level + "%");
+        boolean charging =
+                status ==
+                        BatteryManager.BATTERY_STATUS_CHARGING
+                        ||
+                status ==
+                        BatteryManager.BATTERY_STATUS_FULL;
+
+        /*
+         * Always update the percentage.
+         */
+        if (level >= 0) {
+
+            batteryText.setText(
+                    level + "%"
+            );
+        }
 
         if (charging) {
 
-            chargingText.setText("⚡ CHARGING");
-            chargingText.setTextColor(
-                    Color.rgb(34, 197, 94)
-            );
+            String chargingType =
+                    getChargingType(
+                            plugged
+                    );
 
             if (level >= 100) {
+
+                chargingText.setText(
+                        "🔥 FULL • " +
+                        chargingType
+                );
+
+                chargingText.setTextColor(
+                        Color.rgb(
+                                255,
+                                90,
+                                70
+                        )
+                );
 
                 insightText.setText(
                         "🔥 FULL POWER\n\n" +
@@ -140,21 +250,60 @@ public class MainActivity extends Activity {
 
             } else if (level >= 90) {
 
+                chargingText.setText(
+                        "⚡ CHARGING • " +
+                        chargingType
+                );
+
+                chargingText.setTextColor(
+                        Color.rgb(
+                                250,
+                                204,
+                                21
+                        )
+                );
+
                 insightText.setText(
                         "🚨 FINAL CHARGE ZONE\n\n" +
                         "You're above 90%.\n" +
-                        "ChargeGuard is watching the battery."
+                        "ChargeGuard is watching your battery."
                 );
 
             } else if (level <= 20) {
 
+                chargingText.setText(
+                        "⚡ CHARGING • " +
+                        chargingType
+                );
+
+                chargingText.setTextColor(
+                        Color.rgb(
+                                34,
+                                197,
+                                94
+                        )
+                );
+
                 insightText.setText(
-                        "🆘 LOW BATTERY\n\n" +
-                        "Battery is getting low.\n" +
-                        "Consider charging soon."
+                        "🔋 POWER RECOVERY\n\n" +
+                        "Battery is low and charging.\n" +
+                        "ChargeGuard is monitoring the recovery."
                 );
 
             } else {
+
+                chargingText.setText(
+                        "⚡ CHARGING • " +
+                        chargingType
+                );
+
+                chargingText.setTextColor(
+                        Color.rgb(
+                                34,
+                                197,
+                                94
+                        )
+                );
 
                 insightText.setText(
                         "🧠 AI BATTERY WATCH\n\n" +
@@ -165,7 +314,9 @@ public class MainActivity extends Activity {
 
         } else {
 
-            chargingText.setText("● NOT CHARGING");
+            chargingText.setText(
+                    "● NOT CHARGING"
+            );
 
             chargingText.setTextColor(
                     Color.LTGRAY
@@ -194,6 +345,63 @@ public class MainActivity extends Activity {
                 );
             }
         }
+
+        /*
+         * Small live status at bottom.
+         */
+        if (alertStatusText != null) {
+
+            if (alertsEnabled) {
+
+                alertStatusText.setText(
+                        "🛡 ChargeGuard is protecting your battery"
+                );
+
+            } else {
+
+                alertStatusText.setText(
+                        "🔕 Charge alerts are currently disabled"
+                );
+            }
+        }
+    }
+
+    /*
+     * Detects whether charging is through USB, AC,
+     * wireless or another charging source.
+     */
+    private String getChargingType(int plugged) {
+
+        if (plugged ==
+                BatteryManager.BATTERY_PLUGGED_USB) {
+
+            return "USB";
+
+        } else if (plugged ==
+                BatteryManager.BATTERY_PLUGGED_AC) {
+
+            return "AC";
+
+        } else if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.JELLY_BEAN_MR1
+                &&
+                plugged ==
+                        BatteryManager.BATTERY_PLUGGED_WIRELESS) {
+
+            return "WIRELESS";
+
+        } else if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.TIRAMISU
+                &&
+                plugged ==
+                        BatteryManager.BATTERY_PLUGGED_DOCK) {
+
+            return "DOCK";
+
+        } else {
+
+            return "CHARGER";
+        }
     }
 
     private void buildInterface() {
@@ -213,7 +421,11 @@ public class MainActivity extends Activity {
         );
 
         root.setBackgroundColor(
-                Color.rgb(7, 7, 10)
+                Color.rgb(
+                        7,
+                        7,
+                        10
+                )
         );
 
         TextView logo =
@@ -246,7 +458,11 @@ public class MainActivity extends Activity {
         );
 
         aiLabel.setTextColor(
-                Color.rgb(168, 85, 247)
+                Color.rgb(
+                        168,
+                        85,
+                        247
+                )
         );
 
         aiLabel.setTextSize(13);
@@ -270,7 +486,9 @@ public class MainActivity extends Activity {
         batteryText =
                 new TextView(this);
 
-        batteryText.setText("--%");
+        batteryText.setText(
+                "--%"
+        );
 
         batteryText.setTextColor(
                 Color.WHITE
@@ -291,7 +509,7 @@ public class MainActivity extends Activity {
                 new TextView(this);
 
         chargingText.setText(
-                "Checking..."
+                "CHECKING..."
         );
 
         chargingText.setTextColor(
@@ -341,24 +559,19 @@ public class MainActivity extends Activity {
         );
 
         insightText.setBackgroundColor(
-                Color.rgb(24, 24, 28)
+                Color.rgb(
+                        24,
+                        24,
+                        28
+                )
         );
 
         Button alertsButton =
                 new Button(this);
 
-        if (alertsEnabled) {
-
-            alertsButton.setText(
-                    "🔔  ALERTS: ON"
-            );
-
-        } else {
-
-            alertsButton.setText(
-                    "🔕  ALERTS: OFF"
-            );
-        }
+        updateAlertButton(
+                alertsButton
+        );
 
         alertsButton.setTextColor(
                 Color.WHITE
@@ -366,7 +579,8 @@ public class MainActivity extends Activity {
 
         alertsButton.setOnClickListener(v -> {
 
-            alertsEnabled = !alertsEnabled;
+            alertsEnabled =
+                    !alertsEnabled;
 
             preferences.edit()
                     .putBoolean(
@@ -375,39 +589,29 @@ public class MainActivity extends Activity {
                     )
                     .apply();
 
-            Intent serviceIntent =
-                    new Intent(
-                            this,
-                            ChargeAlertService.class
-                    );
-
-            serviceIntent.setAction(
-                    ChargeAlertService.ACTION_UPDATE_SETTINGS
+            /*
+             * No ACTION_UPDATE_SETTINGS here.
+             * This avoids the previous compile error.
+             */
+            updateAlertButton(
+                    alertsButton
             );
 
-            startService(serviceIntent);
+            updateBatteryDisplay();
 
             if (alertsEnabled) {
 
-                alertsButton.setText(
-                        "🔔  ALERTS: ON"
-                );
-
                 Toast.makeText(
                         this,
-                        "Charge alerts enabled ⚡",
+                        "⚡ Charge alerts enabled",
                         Toast.LENGTH_SHORT
                 ).show();
 
             } else {
 
-                alertsButton.setText(
-                        "🔕  ALERTS: OFF"
-                );
-
                 Toast.makeText(
                         this,
-                        "Charge alerts disabled",
+                        "🔕 Charge alerts disabled",
                         Toast.LENGTH_SHORT
                 ).show();
             }
@@ -439,12 +643,13 @@ public class MainActivity extends Activity {
                 Color.WHITE
         );
 
-        historyButton.setOnClickListener(v ->
-                Toast.makeText(
-                        this,
-                        "Charging history module is next 📊",
-                        Toast.LENGTH_SHORT
-                ).show()
+        historyButton.setOnClickListener(
+                v ->
+                        Toast.makeText(
+                                this,
+                                "📊 Charging history module is next",
+                                Toast.LENGTH_SHORT
+                        ).show()
         );
 
         Button aiButton =
@@ -458,8 +663,8 @@ public class MainActivity extends Activity {
                 Color.WHITE
         );
 
-        aiButton.setOnClickListener(v ->
-                showSmartInsight()
+        aiButton.setOnClickListener(
+                v -> showSmartInsight()
         );
 
         alertStatusText =
@@ -485,18 +690,54 @@ public class MainActivity extends Activity {
         root.addView(chargingText);
         root.addView(insightText);
 
-        addSpace(root, 18);
+        addSpace(
+                root,
+                18
+        );
 
-        root.addView(alertsButton);
-        root.addView(soundButton);
-        root.addView(historyButton);
-        root.addView(aiButton);
+        root.addView(
+                alertsButton
+        );
 
-        addSpace(root, 12);
+        root.addView(
+                soundButton
+        );
 
-        root.addView(alertStatusText);
+        root.addView(
+                historyButton
+        );
+
+        root.addView(
+                aiButton
+        );
+
+        addSpace(
+                root,
+                12
+        );
+
+        root.addView(
+                alertStatusText
+        );
 
         setContentView(root);
+    }
+
+    private void updateAlertButton(
+            Button button) {
+
+        if (alertsEnabled) {
+
+            button.setText(
+                    "🔔  ALERTS: ON"
+            );
+
+        } else {
+
+            button.setText(
+                    "🔕  ALERTS: OFF"
+            );
+        }
     }
 
     private void chooseAlertSound() {
@@ -512,7 +753,8 @@ public class MainActivity extends Activity {
                         .EXTRA_RINGTONE_TYPE,
                 android.media.RingtoneManager
                         .TYPE_NOTIFICATION
-                        | android.media.RingtoneManager
+                        |
+                android.media.RingtoneManager
                         .TYPE_ALARM
         );
 
@@ -557,8 +799,11 @@ public class MainActivity extends Activity {
 
         if (requestCode ==
                 SOUND_PICKER_REQUEST
-                && resultCode == RESULT_OK
-                && data != null) {
+                &&
+                resultCode ==
+                        RESULT_OK
+                &&
+                data != null) {
 
             Uri soundUri =
                     data.getParcelableExtra(
@@ -589,7 +834,7 @@ public class MainActivity extends Activity {
         Intent batteryIntent =
                 registerReceiver(
                         null,
-                        new android.content.IntentFilter(
+                        new IntentFilter(
                                 Intent.ACTION_BATTERY_CHANGED
                         )
                 );
@@ -604,40 +849,63 @@ public class MainActivity extends Activity {
                         -1
                 );
 
+        int plugged =
+                batteryIntent.getIntExtra(
+                        BatteryManager.EXTRA_PLUGGED,
+                        -1
+                );
+
+        String chargingType =
+                getChargingType(
+                        plugged
+                );
+
         String message;
 
         if (level >= 95) {
 
             message =
-                    "🔥 Almost full.\n\n" +
+                    "🔥 ALMOST FULL\n\n" +
+                    "You're at " + level + "%.\n" +
                     "ChargeGuard recommends unplugging soon.";
 
         } else if (level >= 80) {
 
             message =
-                    "🧠 Smart Tip\n\n" +
+                    "🧠 SMART TIP\n\n" +
                     "You're in the high-charge zone.\n" +
-                    "Avoid unnecessary charging for long periods.";
+                    "Avoid unnecessary long charging sessions.";
 
         } else if (level <= 20) {
 
             message =
-                    "🆘 Smart Warning\n\n" +
+                    "🆘 SMART WARNING\n\n" +
                     "Battery is critically low.\n" +
                     "Connect your charger soon.";
 
         } else {
 
             message =
-                    "🧠 Battery Health Tip\n\n" +
+                    "🧠 BATTERY HEALTH TIP\n\n" +
                     "Keep your phone away from excessive heat " +
                     "while charging.\n\n" +
                     "ChargeGuard is watching ⚡";
         }
 
+        if (level > 0) {
+
+            message +=
+                    "\n\n🔌 Current source: " +
+                    chargingType;
+        }
+
         new android.app.AlertDialog.Builder(this)
-                .setTitle("🧠 ChargeGuard AI")
-                .setMessage(message)
+                .setTitle(
+                        "🧠 ChargeGuard AI"
+                )
+                .setMessage(
+                        message
+                )
                 .setPositiveButton(
                         "OK",
                         null
